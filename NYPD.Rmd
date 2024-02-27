@@ -1,0 +1,209 @@
+---
+title: "5301 NYPD Shooting Assignment"
+author: "Tim McCracken"
+date: "2024-02-19"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## NYPD Shooting Incident Data Analysis
+
+This document will load in every shooting incident that occurred in NYC from 2006 to the end of the previous calendar year and then provide analysis using visuals and models.
+
+Question: Where do the majority of shooting incidents and murders occur in NYC? What are the defining characteristics of shooting perpetrators and shooting victims in NYC? 
+
+Per the City of New York, this "data is manually extracted every quarter and reviewed by the office of Management analysis and Planning before being posted on the NYPD website. Each record represents a shooting incident in NYC and includes information about the event, the location and time of occurrence."
+
+Source - https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD
+
+## Load necessary libaries
+
+```{r loadlibraries, echo = TRUE,message=FALSE}
+# install.packages("tidyverse")
+# install.packages("lubridate")
+library(tidyverse)
+library(lubridate)
+```
+
+## Import Data
+
+```{r load_data, echo=TRUE,message=FALSE}
+shooting_incidents = read_csv("https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD")
+```
+
+## Tidy and Transform Data
+
+Here I look at the data and select which columns that I will need for this particular analysis. Then I clean up any missing/incomplete data so the data can be interpreted, modeled, and analyzed.
+```{r tidy_data, echo=TRUE,message=TRUE}
+summary(shooting_incidents)
+tidied_incidents = select(shooting_incidents, OCCUR_DATE, BORO,STATISTICAL_MURDER_FLAG,
+                            PERP_AGE_GROUP, PERP_SEX, PERP_RACE, VIC_AGE_GROUP, VIC_SEX, VIC_RACE)
+summary(tidied_incidents)
+colSums(is.na(tidied_incidents))
+
+tidied_incidents = subset(tidied_incidents, PERP_AGE_GROUP != "224" & PERP_AGE_GROUP != "940" 
+                          & PERP_AGE_GROUP != "1020" & VIC_AGE_GROUP != "1022")
+
+tidied_incidents$BORO = factor(tidied_incidents$BORO)
+
+tidied_incidents <- tidied_incidents %>%
+replace_na(list(PERP_AGE_GROUP = "Unknown", PERP_SEX = "Unknown", PERP_RACE = "Unknown"))
+tidied_incidents$PERP_AGE_GROUP = recode(tidied_incidents$PERP_AGE_GROUP, "UNKNOWN" = "Unknown")
+tidied_incidents$PERP_AGE_GROUP = recode(tidied_incidents$PERP_AGE_GROUP, "(null)" = "Unknown")
+tidied_incidents$PERP_AGE_GROUP = factor(tidied_incidents$PERP_AGE_GROUP)
+
+tidied_incidents$PERP_SEX = recode(tidied_incidents$PERP_SEX, "U" = "Unknown")
+tidied_incidents$PERP_SEX = recode(tidied_incidents$PERP_SEX, "(null)" = "Unknown")
+tidied_incidents$PERP_SEX = factor(tidied_incidents$PERP_SEX)
+
+tidied_incidents$PERP_RACE = recode(tidied_incidents$PERP_RACE, "UNKNOWN" = "Unknown")
+tidied_incidents$PERP_RACE = recode(tidied_incidents$PERP_RACE, "(null)" = "Unknown")
+tidied_incidents$PERP_RACE = factor(tidied_incidents$PERP_RACE)
+
+tidied_incidents$VIC_AGE_GROUP = recode(tidied_incidents$VIC_AGE_GROUP, "UNKNOWN" = "Unknown")
+tidied_incidents$VIC_AGE_GROUP = factor(tidied_incidents$VIC_AGE_GROUP)
+
+tidied_incidents$VIC_SEX = recode(tidied_incidents$VIC_SEX, "U" = "Unknown")
+tidied_incidents$VIC_SEX= factor(tidied_incidents$VIC_SEX)
+
+tidied_incidents$VIC_RACE = recode(tidied_incidents$VIC_RACE, "UNKNOWN" = "Unknown")
+tidied_incidents$VIC_RACE = factor(tidied_incidents$VIC_RACE)
+
+
+summary(tidied_incidents)
+```
+
+
+## Visualize and Analyze the Data
+
+``` {r perp age groups, echo=TRUE}
+ggplot(tidied_incidents, aes(x = PERP_AGE_GROUP)) + 
+  geom_bar() +
+  labs(x = "Perpetrator Age Group", y = "Number of Incidents", 
+       title = "Age Groups of Shooting Perpetrators in NYC")
+
+```
+
+This graph shows the distribution of shooting perpetrators in NYC. It is clear that two age groups dominate the amount of shooting incidents in NYC, 18-24 and 25-44. There is also a substantial amount of incidents from the <18 category which is surprising to me. However, there is almost 4000 incidents where the age of the perpetrator is unknown. My assumption would be that in many shooting incidents it may be difficult to identify how old the shooter is.
+
+``` {r vic age groups, echo = TRUE}
+ggplot(tidied_incidents, aes(x = VIC_AGE_GROUP)) + 
+  geom_bar() +
+  labs(x = "Victim Age Group", y = "Number of Incidents", 
+       title = "Age Groups of Shooting Victims in NYC")
+``` 
+
+The victims of shooting incidents in NYC have a similar distribution to the perpetrators except the unknown amount reduces almost to zero. This is probably due to the fact that in shooting cases the victim can confirm their age while the perpetrator may not be caught and may not be able to be identified.
+
+``` {r ex of perp, echo = TRUE}
+ggplot(tidied_incidents,aes(x="",fill=PERP_SEX)) + 
+  geom_bar() + 
+  labs(x = "Perpetrator Sex", y = "Number of Incidents", 
+       title = "Sex Distribution of Shooting Perpetrators in NYC") + 
+  scale_fill_manual("legend",values=c("M" = "deepskyblue3", F = "pink")) + 
+  coord_polar("y", start=0) + 
+  theme_void()
+
+round(sum(tidied_incidents$PERP_SEX == "M")/length(tidied_incidents$PERP_SEX)*100,1)
+round(sum(tidied_incidents$PERP_SEX == "F")/length(tidied_incidents$PERP_SEX)*100,1)
+```
+
+This is the sex distribution of perpetrators of shooting incidents in NYC. Males dominate this category and are responsible for almost 86% of reported shooting incidents in NYC. Females are only responsible for 2.4% of shooting incidents. Similar to the age group distribution, there is quite a substantial amount of incidents where the sex of the perpetrator is unknown (11.7%),
+
+``` {r sex of vic, echo = TRUE}
+ggplot(tidied_incidents,aes(x="",fill=VIC_SEX)) + 
+  geom_bar() + 
+  labs(x = "Victim Sex", y = "Number of Incidents", 
+       title = "Sex Distribution of Shooting Victims in NYC") + 
+  scale_fill_manual("legend",values=c("M" = "deepskyblue3", F = "pink")) + 
+  coord_polar("y", start=0) + 
+  theme_void()
+
+round(sum(tidied_incidents$VIC_SEX == "M")/length(tidied_incidents$VIC_SEX)*100,1)
+round(sum(tidied_incidents$VIC_SEX == "F")/length(tidied_incidents$VIC_SEX)*100,1)
+```
+
+Again, males dominate the shooting victim category at 89.3% of all incidents. Females are victims in 10.7% of shooting incidents. And similar to the age group distribution, the amount of unknown incidents reduces to almost zero for victims.
+
+``` {r race of perp, echo = TRUE}
+tidied_incidents$PERP_RACE = recode(tidied_incidents$PERP_RACE, 
+                                    "AMERICAN INDIAN/ALASKAN NATIVE" = "AMERICAN INDIAN")
+tidied_incidents$PERP_RACE = recode(tidied_incidents$PERP_RACE, 
+                                    "ASIAN / PACIFIC ISLANDER" = "PACIFIC ISLANDER")
+ggplot(tidied_incidents,aes(x=PERP_RACE)) + 
+  geom_bar() + 
+  labs(x = "Perpetrator Race", y = "Number of Incidents", 
+       title = "Race Distribution of Shooting Perpetrators in NYC") + 
+  theme(axis.text.x = element_text(size=6))
+```
+
+The race distribution for shooting perpetrators in NYC are largely reported to be Black with over 11,000 incidents. The next most reported shooting perpetrators are White Hispanic. Again, due to the nature of shooting cases, it may be difficult to identify characteristics of shooting perpetrators, hence the large amount cases where the race of the perpetrator is unknown.
+
+``` {r race of vic, echo = TRUE}
+tidied_incidents$VIC_RACE = recode(tidied_incidents$VIC_RACE, 
+                                   "AMERICAN INDIAN/ALASKAN NATIVE" = "AMERICAN INDIAN")
+tidied_incidents$VIC_RACE = recode(tidied_incidents$VIC_RACE, 
+                                   "ASIAN / PACIFIC ISLANDER" = "PACIFIC ISLANDER")
+ggplot(tidied_incidents,aes(x=VIC_RACE)) + 
+  geom_bar() + 
+  labs(x = "Victim Race", y = "Number of Incidents", 
+       title = "Race Distribution of Shooting Victims in NYC") + 
+  theme(axis.text.x = element_text(size=6))
+```
+
+The distribution of shooting victims tell a similar story, where the most common race of shooting perpetrators is Black with next being White Hispanic. Again, we see the unknown category fall to almost zero.
+
+``` {r day distr, echo = TRUE}
+tidied_incidents$OCCUR_DATE = mdy(tidied_incidents$OCCUR_DATE)
+tidied_incidents$OCCUR_DATE = wday(tidied_incidents$OCCUR_DATE,label=TRUE)
+incidents_by_day <- tidied_incidents %>%
+  group_by(OCCUR_DATE) %>%
+  count(OCCUR_DATE)
+colnames(incidents_by_day)[2] <- "Incidents"
+ggplot(incidents_by_day,aes(x=OCCUR_DATE,y=Incidents)) + 
+  geom_col(aes(fill=Incidents)) + 
+  labs(x = "Day of the week", y = "Number of Incidents", 
+       title = "Distribution of Shooting Incidents by Day in NYC") + 
+  scale_fill_gradient(low = "darkblue",high = "darkred")
+
+```
+
+This shows the distribution of shooting incidents by day of the week. Not surprisingly, the middle of the week (Tues-Thurs) has the lowest amount of incidents while the weekend (Fri-Sun). This is probably due to the fact that more people are out on the weekend vs the weekday. 
+
+``` {r boroughs, echo=TRUE}
+ggplot(tidied_incidents, aes(x=BORO,fill = STATISTICAL_MURDER_FLAG)) + 
+  geom_bar() +
+  labs(x = "Boroughs of NYC", y = "Number of Incidents", 
+       title = "Most Dangerous Boroughs of NYC Based on Shooting Incidents") +
+  scale_fill_manual(values = c("grey22","firebrick")) + 
+  theme(axis.text.x = element_text(size=8))
+
+
+```
+
+This graph shows the distribution of shooting incidents in each borough of NYC. Brooklyn has the highest number of incidents while Staten Island has the lowest number. Even though there is a substantial difference in the amount of incidents in Brooklyn and the Bronx (almost 2000) the number of deaths as a result of shooting incidents is almost the same. 
+
+## Model the Data
+
+``` {r model, echo=TRUE}
+mod <- glm(family=binomial,STATISTICAL_MURDER_FLAG ~ BORO + PERP_AGE_GROUP + PERP_RACE + PERP_SEX, data = tidied_incidents)
+summary(mod)
+```
+
+I used a generalized linear model with a binomial family to model whether or not certain variables are good predictors of whether or not a shooting incident is a murder. The coefficient estimates represent the log odds ratio of each incident being a murder compared to the reference category. This model chooses reference categories based on the levels of categorical variables that the algorithm deems less relevant or less influential to the outcome. The resulting z and p values indicate the statistical significance of the coefficients. A large absolute z-value indicate the coefficient is statistically significant and a small p-value also indicates that the coefficient is highly significant. 
+
+For example, being in Queens decreases the log odds of murder by 0.13239 compared to the reference category of Manhattan, holding all else constant. If the perpetrator age is between 25-44, this increases the log odds of murder by 0.49913 compared to the reference category age group of <18. 
+
+## Discuss Bias
+
+Due to the nature of this report and selecting RACE and SEX as part of my data, this opens up the report to possible bias. For example, there may be sampling bias based on how this data is collected through the NYC police system. Police in NYC may under represent or over represent certain groups, demographics, or boroughs in NYC. The model itself may have bias in it's output due to confounding variables that it does not account for, or if the chosen predictors do not accurately capture all relevant affecting factors. There could also be bias on the reports of the age group, sex, and race of shooting perpetrators from shooting victims based on a number of factors including racial bias and geographical bias within NYC itself. 
+
+## Conclusion
+
+To answer the original questions, the majority of shooting incidents occur in the Bronx and Brooklyn. The most common shooting perpetrator profile is black, male, and 18-44 years-old. Shooting victims have a similar profile. This report provided unique insight on the characteristics of shooting perpetrators and victims in NYC, as well as the relationship between location, day of the week, and borough to shooting incidents. 
